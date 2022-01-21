@@ -503,6 +503,66 @@
                     </property>
                    </widget>
                   </item>
+                  <item row="6" column="0" colspan="2">
+                   <widget class="QLabel" name="scriptAction1Label">
+                    <property name="toolTip">
+                     <string>&lt;p&gt;A user-defined script function that can be called with selected cell's contents.&lt;/p&gt;</string>
+                    </property>
+                    <property name="text">
+                     <string>Script action 1</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="6" column="2">
+                   <widget class="QComboBox" name="scriptAction1Combo">
+                    <property name="toolTip">
+                     <string>&lt;p&gt;A user-defined script function that can be called with selected cell's contents.&lt;/p&gt;</string>
+                    </property>
+                    <property name="cfg" stdset="0">
+                     <string notr="true">General.ScriptAction1</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="7" column="0" colspan="2">
+                   <widget class="QLabel" name="scriptAction2Label">
+                    <property name="toolTip">
+                     <string>&lt;p&gt;A user-defined script function that can be called with selected cell's contents.&lt;/p&gt;</string>
+                    </property>
+                    <property name="text">
+                     <string>Script action 2</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="7" column="2">
+                   <widget class="QComboBox" name="scriptAction2Combo">
+                    <property name="toolTip">
+                     <string>&lt;p&gt;A user-defined script function that can be called with selected cell's contents.&lt;/p&gt;</string>
+                    </property>
+                    <property name="cfg" stdset="0">
+                     <string notr="true">General.ScriptAction2</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="8" column="0" colspan="2">
+                   <widget class="QLabel" name="scriptAction3Label">
+                    <property name="toolTip">
+                     <string>&lt;p&gt;A user-defined script function that can be called with selected cell's contents.&lt;/p&gt;</string>
+                    </property>
+                    <property name="text">
+                     <string>Script action 3</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="8" column="2">
+                   <widget class="QComboBox" name="scriptAction3Combo">
+                    <property name="toolTip">
+                     <string>&lt;p&gt;A user-defined script function that can be called with selected cell's contents.&lt;/p&gt;</string>
+                    </property>
+                    <property name="cfg" stdset="0">
+                     <string notr="true">General.ScriptAction3</string>
+                    </property>
+                   </widget>
+                  </item>
                   <item row="2" column="2">
                    <widget class="QSpinBox" name="memPopulConfigsCheck">
                     <property name="toolTip">

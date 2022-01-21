@@ -22,7 +22,8 @@ class API_EXPORT FunctionManager : public QObject
             enum Type
             {
                 SCALAR = 0,
-                AGGREGATE = 1
+                AGGREGATE = 1,
+                ACTION = 2
             };
 
             FunctionBase();
@@ -58,10 +59,12 @@ class API_EXPORT FunctionManager : public QObject
         };
 
         virtual void setScriptFunctions(const QList<ScriptFunction*>& newFunctions) = 0;
+        virtual QList<ScriptFunction*> getAllScriptActions() const = 0;
         virtual QList<ScriptFunction*> getAllScriptFunctions() const = 0;
         virtual QList<ScriptFunction*> getScriptFunctionsForDatabase(const QString& dbName) const = 0;
         virtual QList<NativeFunction*> getAllNativeFunctions() const = 0;
 
+        virtual QVariant evaluateAction(const QString& name, int argCount, const QList<QVariant>& args, Db* db, bool& ok) = 0;
         virtual QVariant evaluateScalar(const QString& name, int argCount, const QList<QVariant>& args, Db* db, bool& ok) = 0;
         virtual void evaluateAggregateInitial(const QString& name, int argCount, Db* db, QHash<QString, QVariant>& aggregateStorage) = 0;
         virtual void evaluateAggregateStep(const QString& name, int argCount, const QList<QVariant>& args, Db* db,

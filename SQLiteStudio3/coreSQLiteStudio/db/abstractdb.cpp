@@ -877,6 +877,7 @@ void AbstractDb::registerFunction(const AbstractDb::RegisteredFunction& function
     switch (function.type)
     {
         case FunctionManager::ScriptFunction::SCALAR:
+        case FunctionManager::ScriptFunction::ACTION:
             successful = registerScalarFunction(function.name, function.argCount, function.deterministic);
             break;
         case FunctionManager::ScriptFunction::AGGREGATE:

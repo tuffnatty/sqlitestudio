@@ -16,9 +16,11 @@ class API_EXPORT FunctionManagerImpl : public FunctionManager
         FunctionManagerImpl();
 
         void setScriptFunctions(const QList<ScriptFunction*>& newFunctions);
+        QList<ScriptFunction*> getAllScriptActions() const;
         QList<ScriptFunction*> getAllScriptFunctions() const;
         QList<ScriptFunction*> getScriptFunctionsForDatabase(const QString& dbName) const;
         QList<NativeFunction*> getAllNativeFunctions() const;
+        QVariant evaluateAction(const QString& name, int argCount, const QList<QVariant>& args, Db* db, bool& ok);
         QVariant evaluateScalar(const QString& name, int argCount, const QList<QVariant>& args, Db* db, bool& ok);
         void evaluateAggregateInitial(const QString& name, int argCount, Db* db, QHash<QString, QVariant>& aggregateStorage);
         void evaluateAggregateStep(const QString& name, int argCount, const QList<QVariant>& args, Db* db, QHash<QString, QVariant>& aggregateStorage);

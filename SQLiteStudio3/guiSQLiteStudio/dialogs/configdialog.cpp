@@ -30,6 +30,7 @@
 #include "syntaxhighlighterplugin.h"
 #include "sqleditor.h"
 #include "style.h"
+#include "services/functionmanager.h"
 #include <QSignalMapper>
 #include <QLineEdit>
 #include <QSpinBox>
@@ -194,6 +195,7 @@ void ConfigDialog::init()
     initLangs();
     initTooltips();
     initColors();
+    initScriptActions();
 
     connect(ui->categoriesTree, SIGNAL(currentItemChanged(QTreeWidgetItem*,QTreeWidgetItem*)), this, SLOT(switchPage(QTreeWidgetItem*)));
     connect(ui->previewTabs, SIGNAL(currentChanged(int)), this, SLOT(updateStylePreview()));
@@ -1769,6 +1771,31 @@ void ConfigDialog::initTooltips()
                          tr("Here you can configure colors for code syntax highlighting."
                             "They are shared across different languages - not only for SQL, but also JavaScript and others."));
 
+}
+
+void ConfigDialog::initScriptActions()
+{
+    int idx = 1;
+    QList<FunctionManager::ScriptFunction *> actions = FUNCTIONS->getAllScriptActions();
+    QString action1 = CFG_UI.General.ScriptAction1.get();
+    QString action2 = CFG_UI.General.ScriptAction2.get();
+    QString action3 = CFG_UI.General.ScriptAction3.get();
+    ui->scriptAction1Combo->addItem("", "");
+    ui->scriptAction2Combo->addItem("", "");
+    ui->scriptAction3Combo->addItem("", "");
+    for (FunctionManager::ScriptFunction *action : actions)
+    {
+        ui->scriptAction1Combo->addItem(action->name, action->name);
+        if (action->name == action1)
+           ui->scriptAction1Combo->setCurrentIndex(idx);
+        ui->scriptAction2Combo->addItem(action->name, action->name);
+        if (action->name == action2)
+           ui->scriptAction2Combo->setCurrentIndex(idx);
+        ui->scriptAction3Combo->addItem(action->name, action->name);
+        if (action->name == action3)
+           ui->scriptAction3Combo->setCurrentIndex(idx);
+        idx++;
+    }
 }
 
 bool ConfigDialog::isPluginCategoryItem(QTreeWidgetItem *item) const

@@ -17,6 +17,7 @@
 #include "common/utils_sql.h"
 #include "querygenerator.h"
 #include "services/codeformatter.h"
+#include "services/functionmanager.h"
 #include <QPushButton>
 #include <QProgressBar>
 #include <QGridLayout>
@@ -108,6 +109,9 @@ void SqlQueryView::createActions()
     createAction(INSERT_MULTIPLE_ROWS, ICONS.INSERT_ROWS, tr("Insert multiple rows"), this, SIGNAL(requestForMultipleRowInsert()), this);
     createAction(DELETE_ROW, ICONS.DELETE_ROW, tr("Delete selected row"), this, SIGNAL(requestForRowDelete()), this);
     createAction(LOAD_FULL_VALUES, ICONS.LOAD_FULL_VALUES, tr("Load full values"), this, SLOT(loadFullValuesForColumn()), this);
+    createAction(SCRIPT_ACTION_1, ICONS.OPEN_VALUE_EDITOR, tr(""), this, SLOT(scriptAction1()), this); // actual label is set dynamically in setupActionsForMenu()
+    createAction(SCRIPT_ACTION_2, ICONS.OPEN_VALUE_EDITOR, tr(""), this, SLOT(scriptAction2()), this); // actual label is set dynamically in setupActionsForMenu()
+    createAction(SCRIPT_ACTION_3, ICONS.OPEN_VALUE_EDITOR, tr(""), this, SLOT(scriptAction3()), this); // actual label is set dynamically in setupActionsForMenu()
 
     actionMap[RESET_SORTING]->setEnabled(false);
 }
@@ -170,6 +174,35 @@ void SqlQueryView::setupActionsForMenu(SqlQueryItem* currentItem, const QList<Sq
         }
         contextMenu->addAction(actionMap[OPEN_VALUE_EDITOR]);
         contextMenu->addSeparator();
+    }
+
+    // Custom actions
+    bool haveActions = false;
+    if (!CFG_UI.General.ScriptAction1.get().isEmpty())
+    {
+        actionMap[SCRIPT_ACTION_1]->setText(tr("%1(value)").arg(CFG_UI.General.ScriptAction1.get()));
+        haveActions = true;
+    }
+    if (!CFG_UI.General.ScriptAction2.get().isEmpty())
+    {
+        actionMap[SCRIPT_ACTION_2]->setText(tr("%1(value)").arg(CFG_UI.General.ScriptAction2.get()));
+        haveActions = true;
+    }
+    if (!CFG_UI.General.ScriptAction3.get().isEmpty())
+    {
+        actionMap[SCRIPT_ACTION_3]->setText(tr("%1(value)").arg(CFG_UI.General.ScriptAction3.get()));
+        haveActions = true;
+    }
+    if (selCount == 1)
+    {
+        if (!CFG_UI.General.ScriptAction1.get().isEmpty())
+            contextMenu->addAction(actionMap[SCRIPT_ACTION_1]);
+        if (!CFG_UI.General.ScriptAction2.get().isEmpty())
+            contextMenu->addAction(actionMap[SCRIPT_ACTION_2]);
+        if (!CFG_UI.General.ScriptAction3.get().isEmpty())
+            contextMenu->addAction(actionMap[SCRIPT_ACTION_3]);
+        if (haveActions)
+            contextMenu->addSeparator();
     }
 
     if (selCount == 1 && currentItem && selectedItems.first() == currentItem)
@@ -869,6 +902,41 @@ void SqlQueryView::openValueEditor()
 {
     SqlQueryItem* currentItem = getCurrentItem();
     openValueEditor(currentItem);
+}
+
+void SqlQueryView::scriptAction(const QString& name)
+{
+    if (name.isEmpty())
+    {
+        qWarning() << "Script action is not configured.";
+        return;
+    }
+
+    SqlQueryItem* item = getCurrentItem();
+    QList<QVariant> args;
+    bool ok = false;
+    args << item->getFullValue();
+    FUNCTIONS->evaluateAction(name, 1, args, NULL, ok);
+
+    if (!ok)
+    {
+        qWarning() << "Script action reported not ok.";
+    }
+}
+
+void SqlQueryView::scriptAction1()
+{
+    scriptAction(CFG_UI.General.ScriptAction1.get());
+}
+
+void SqlQueryView::scriptAction2()
+{
+    scriptAction(CFG_UI.General.ScriptAction2.get());
+}
+
+void SqlQueryView::scriptAction3()
+{
+    scriptAction(CFG_UI.General.ScriptAction3.get());
 }
 
 int qHash(SqlQueryView::Action action)

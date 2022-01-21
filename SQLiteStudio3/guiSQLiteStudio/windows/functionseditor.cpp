@@ -111,6 +111,7 @@ void FunctionsEditor::init()
 
     ui->typeCombo->addItem(tr("Scalar"), FunctionManager::ScriptFunction::SCALAR);
     ui->typeCombo->addItem(tr("Aggregate"), FunctionManager::ScriptFunction::AGGREGATE);
+    ui->typeCombo->addItem(tr("Action"), FunctionManager::ScriptFunction::ACTION);
 
     new UserInputFilter(ui->functionFilterEdit, this, SLOT(applyFilter(QString)));
     functionFilterModel->setFilterCaseSensitivity(Qt::CaseInsensitive);

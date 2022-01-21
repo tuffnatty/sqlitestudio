@@ -31,6 +31,9 @@ CFG_KEY_LIST(SqlQueryView, QObject::tr("Data grid view"),
     CFG_KEY_ENTRY(DELETE_ROW,        Qt::Key_Delete,                    QObject::tr("Delete selected data row"))
     CFG_KEY_ENTRY(INSERT_ROW,        Qt::Key_Insert,                    QObject::tr("Insert new data row"))
     CFG_KEY_ENTRY(OPEN_VALUE_EDITOR, Qt::ALT + Qt::Key_Return,          QObject::tr("Open contents of selected cell in a separate editor"))
+    CFG_KEY_ENTRY(SCRIPT_ACTION_1,   Qt::CTRL + Qt::Key_1,              QObject::tr("Call script action 1 with the selected cell contents"))
+    CFG_KEY_ENTRY(SCRIPT_ACTION_2,   Qt::CTRL + Qt::Key_2,              QObject::tr("Call script action 2 with the selected cell contents"))
+    CFG_KEY_ENTRY(SCRIPT_ACTION_3,   Qt::CTRL + Qt::Key_3,              QObject::tr("Call script action 3 with the selected cell contents"))
 )
 
 class GUI_API_EXPORT SqlQueryView : public QTableView, public ExtActionContainer
@@ -62,7 +65,10 @@ class GUI_API_EXPORT SqlQueryView : public QTableView, public ExtActionContainer
             GENERATE_SELECT,
             GENERATE_INSERT,
             GENERATE_UPDATE,
-            GENERATE_DELETE
+            GENERATE_DELETE,
+            SCRIPT_ACTION_1,
+            SCRIPT_ACTION_2,
+            SCRIPT_ACTION_3
         };
 
         enum ToolBar
@@ -127,6 +133,7 @@ class GUI_API_EXPORT SqlQueryView : public QTableView, public ExtActionContainer
         int beforeExecutionHorizontalPosition = -1;
         int headerContextMenuSection = -1;
         QModelIndex indexUnderCursor;
+        void scriptAction(const QString& name);
 
     private slots:
         void updateCommitRollbackActions(bool enabled);
@@ -160,6 +167,9 @@ class GUI_API_EXPORT SqlQueryView : public QTableView, public ExtActionContainer
         void selectiveRollback();
         void openValueEditor(SqlQueryItem* item);
         void openValueEditor();
+        void scriptAction1();
+        void scriptAction2();
+        void scriptAction3();
 
     signals:
         void contextMenuRequested(SqlQueryItem* currentItem, const QList<SqlQueryItem*>& selectedItems);

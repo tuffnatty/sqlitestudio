@@ -76,6 +76,17 @@ void FunctionManagerImpl::setScriptFunctions(const QList<ScriptFunction*>& newFu
     emit functionListChanged();
 }
 
+QList<FunctionManager::ScriptFunction*> FunctionManagerImpl::getAllScriptActions() const
+{
+    QList<ScriptFunction*> results;
+    for (ScriptFunction* func : functions)
+    {
+        if (func->type == ScriptFunction::ACTION)
+            results << func;
+    }
+    return results;
+}
+
 QList<FunctionManager::ScriptFunction*> FunctionManagerImpl::getAllScriptFunctions() const
 {
     return functions;
@@ -90,6 +101,27 @@ QList<FunctionManager::ScriptFunction*> FunctionManagerImpl::getScriptFunctionsF
             results << func;
     }
     return results;
+}
+
+QVariant FunctionManagerImpl::evaluateAction(const QString& name, int argCount, const QList<QVariant>& args, Db* db, bool& ok)
+{
+    Key key;
+    key.name = name;
+    key.argCount = argCount;
+    key.type = ScriptFunction::ACTION;
+    if (functionsByKey.contains(key))
+    {
+        ScriptFunction* function = functionsByKey[key];
+        return evaluateScriptScalar(function, name, argCount, args, db, ok);
+    }
+    else if (nativeFunctionsByKey.contains(key))
+    {
+        NativeFunction* function = nativeFunctionsByKey[key];
+        return evaluateNativeScalar(function, args, db, ok);
+    }
+
+    ok = false;
+    return cannotFindFunctionError(name, argCount);
 }
 
 QVariant FunctionManagerImpl::evaluateScalar(const QString& name, int argCount, const QList<QVariant>& args, Db* db, bool& ok)
