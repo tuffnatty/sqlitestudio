@@ -67,8 +67,12 @@ win32: {
     LIBS += -L$$PWD/../../../lib -ledit_static
 }
 
-unix: {
+linux: {
     LIBS += -lreadline
+}
+
+unix:!linux: {
+    LIBS += -ledit
 }
 
 HEADERS += \
@@ -107,30 +111,3 @@ unix: {
 
 RESOURCES += \
     sqlitestudiocli.qrc
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
