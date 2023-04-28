@@ -1,9 +1,9 @@
-name: "Linux build runner image"
+name: "Linux build runner image (aarch64)"
 
 env:
-    icu_version: "74.1"
-    openssl_version: "1.1.1w"
-    python_version: "3.9.18"
+    icu_version: "73.1"
+    openssl_version: "1.1.1u"
+    python_version: "3.9.17"
     tcl_version: "8.6.13"
 
 on:
@@ -15,23 +15,18 @@ on:
 
 jobs:
     build:
-        runs-on: ubuntu-20.04
+        runs-on: ubuntu-latest
 
         strategy:
           fail-fast: false
           matrix:
             release:
-              - xenial
-              - bionic
+              - xenial.aarch64
             include:
-              - release: xenial
+              - release: xenial.aarch64
                 container: ubuntu:xenial
-                target_arch: x86_64
-                docker_platform: linux/amd64
-              - release: bionic
-                container: ubuntu:bionic
-                target_arch: x86_64
-                docker_platform: linux/amd64
+                target_arch: aarch64
+                docker_platform: linux/arm64
         steps:
             - name: Prepare Dockerfile
               run: |
@@ -66,14 +61,11 @@ jobs:
                     && make -j$(nproc) && make install \
                     && cd ../.. && rm -fr openssl-${{ env.openssl_version }}
                 # Installing Python under /usr improves our chances to match user's installed Python
-                # On Bionic, install system python3 first so it is not reinstalled by aqtinstall later
                 RUN curl -L $python_url | xz -dc | tar -x \
                     && apt-get -y install libbz2-dev libffi-dev libgdbm-dev liblzma-dev libsqlite3-dev uuid-dev zlib1g-dev \
                     && case ${{ matrix.release }} in xenial*) ;; *) apt-get -y install libgdbm-compat-dev ;; esac \
-                    && case ${{ matrix.release }} in bionic*) apt-get -y install python3 python3-distutils python3-lib2to3 python3-minimal ;; esac \
                     && cd Python-${{ env.python_version }} && ./configure --prefix=/usr --with-openssl=/usr/local --enable-optimizations --enable-shared --without-static-libpython \
                     && make -j$(nproc) && make install \
-                    && ln -fns python${python_version%.*} /usr/bin/python3 \
                     && cd ../../ && rm -fr Python-${{ env.python_version }} \
                     && case ${{ matrix.release }} in xenial*) ;; *) apt-get -y remove libgdbm-compat-dev ;; esac \
                     && apt-get -y remove libbz2-dev libffi-dev libgdbm-dev liblzma-dev libsqlite3-dev uuid-dev zlib1g-dev
