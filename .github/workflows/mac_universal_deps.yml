@@ -78,8 +78,8 @@ jobs:
               uses: actions/cache/restore@v4
               with:
                 path: distfiles
-                key: distfiles-${{ matrix.binary_compatibility }}-${{ github.sha }}
-                restore-keys: distfiles-${{ matrix.binary_compatibility }}-
+                key: distfiles-${{ matrix.binary_compatibility }}--${{ github.sha }}
+                restore-keys: distfiles-${{ matrix.binary_compatibility }}--
 
             - name: Fetch distfiles
               run: |
@@ -123,6 +123,14 @@ jobs:
                 key: macports-${{ matrix.binary_compatibility }}-${{ github.sha }}
                 restore-keys: macports-${{ matrix.binary_compatibility }}-
 
+            - name: Prepare ccache
+              if: inputs.use_ccache || false
+              uses: actions/cache@v2
+              with:
+                path: ~/.macports-ci-ccache
+                key: ccache-macdeps-${{ matrix.binary_compatibility }}-${{ github.sha }}
+                restore-keys: ccache-macdeps-${{ matrix.binary_compatibility }}-
+
             - name: Install MacPorts
               if: env.MISSING_PACKAGES != ''
               run: |
@@ -133,6 +141,7 @@ jobs:
             - name: Restore MacPorts from cache
               if: env.MISSING_PACKAGES != '' && inputs.use_macports_cache
               run: |
+                set -x
                 echo "CACHE_TIMESTAMP=$(date '+%Y%m%d-%H%M%S')" >> $GITHUB_ENV
                 if [ -f ~/macports-cache/macports.tar.bz2 ]; then
                     # Remove fresh installation keeping only /opt/local/etc/macports/macports.conf, /opt/local/var/macports/sources
@@ -144,6 +153,7 @@ jobs:
                     sudo tar -C / -xjpf ~/macports-cache/macports.tar.bz2
                     sudo cp -p macports.conf /opt/local/etc/macports/
                 fi
+                echo "UPDATE_MACPORTS_CACHE=yes" >> $GITHUB_ENV
 
             - name: Add local ports
               if: env.MISSING_PACKAGES != ''
@@ -166,33 +176,33 @@ jobs:
                 sed -i '' 's,"port:clang-\${llvm_version}","",' \
                     aqua/qt5/Portfile
 
-                # Make python311 a non-dependency of qt5-qtdeclarative
-                sed -i '' "s/python311/$_our_python/g;s/3\\.11/3.${_our_python#python3}/g" \
+                # Make python312 a non-dependency of qt5-qtdeclarative
+                sed -i '' "s/python312/$_our_python/g;s/3\\.12/3.${_our_python#python3}/g" \
                     aqua/qt5/Portfile
 
-                # Make python311 a non-dependency of glib2
+                # Make python312 a non-dependency of glib2
                 cp -rp $_ports_src/devel/glib2 devel/
                 sed -i '' "s/^set py_ver .*/set py_ver 3.${_our_python#python3}/" \
                     devel/glib2/Portfile
 
-                # Make python311 a non-dependency of meson
+                # Make python312 a non-dependency of meson
                 cp -rp $_ports_src/devel/meson devel/
-                sed -i '' "s/^python\\.default_version.*/python.default_version ${_our_python#python}/" \
+                sed -i '' "s/^set py_ver .*/set py_ver 3.${_our_python#python3}/" \
                     devel/meson/Portfile
 
-                # Make python311 a non-dependency of ninja
+                # Make python312 a non-dependency of ninja
                 cp -rp $_ports_src/devel/ninja devel/
                 sed -i '' "s/^set py_ver .*/set py_ver 3.${_our_python#python3}/" \
                     devel/ninja/Portfile
 
-                # Make python311 a non-dependency of gobject-introspection
+                # Make python312 a non-dependency of gobject-introspection
                 cp -rp $_ports_src/gnome/gobject-introspection gnome/
                 sed -i '' "s/^set py_ver .*/set py_ver 3.${_our_python#python3}/" \
                     gnome/gobject-introspection/Portfile
 
-                # Make python310 a non-dependency of fontconfig
+                # Make python312 a non-dependency of fontconfig
                 cp -rp $_ports_src/graphics/fontconfig graphics/
-                sed -i '' "s/port:python310/port:$_our_python/" \
+                sed -i '' "s/^ set python_version .*/set python_version 3.${_our_python#python3}/" \
                     graphics/fontconfig/Portfile
 
                 cd ..
@@ -219,7 +229,6 @@ jobs:
                 esac
                 case "$MISSING_PACKAGES" in *harfbuzz*)
                     echo "::group::Installing harfbuzz dependencies"
-                    sudo port -Nk install python310  # fontconfig seems to need it badly but -universal is ok
                     sudo port -Nkv install cairo -x11 +universal  # skip x11 dependencies
                     echo "::endgroup::"
                     ;;
@@ -299,7 +308,7 @@ jobs:
                 set -x
                 sudo rm -fr /opt/local/var/macports/{build,logs,sources}/*
                 rm -fr ~/macports-cache && mkdir ~/macports-cache
-                sudo tar -cjpf ~/macports-cache/macports.tar.bz2 /opt/local || true
+                sudo tar -cjpf ~/macports-cache/macports.tar.bz2 /opt/local || echo "UPDATE_MACPORTS_CACHE=no" >> $GITHUB_ENV
 
             - name: Save distfiles cache
               if: always() && env.UPDATE_DISTFILES_CACHE == 'yes'
@@ -309,8 +318,12 @@ jobs:
                 key: ${{ steps.cache-distfiles.outputs.cache-primary-key }}-${{ env.CACHE_TIMESTAMP }}
 
             - name: Save MacPorts cache
-              if: always() && env.MISSING_PACKAGES != '' && inputs.use_macports_cache
+              if: always() && env.MISSING_PACKAGES != '' && inputs.use_macports_cache && env.UPDATE_MACPORTS_CACHE == 'yes'
               uses: actions/cache/save@v4
               with:
                 path: ~/macports-cache
                 key: macports-${{ matrix.binary_compatibility }}-${{ github.sha }}-${{ env.CACHE_TIMESTAMP }}
+
+            - name: Save MacPorts-CI ccache
+              if: always() && inputs.use_ccache
+              run: source ./macports-ci ccache --save
