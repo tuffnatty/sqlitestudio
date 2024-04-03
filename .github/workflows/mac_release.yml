@@ -4,7 +4,7 @@ env:
     SQLITE_VERSION: '3410200'
     SQLITE_RELEASE_YEAR: '2023'
     PYTHON_VERSION: '3.9'
-    ICU_VERSION: '74.1'
+    ICU_VERSION: '74.2'
     PORTABLE_DIR: ${{ github.workspace }}/output/portable/SQLiteStudio
     INSTALLBUILDER_DIR: ../ib
     INSTALLBUILDER_URL: https://releases.installbuilder.com/installbuilder/installbuilder-enterprise-24.3.0-osx-installer.dmg
@@ -25,7 +25,7 @@ on:
 
 jobs:
     build:
-        runs-on: macos-11
+        runs-on: ${{ matrix.runner || 'macos-11' }}
 
         strategy:
           fail-fast: false
@@ -35,24 +35,27 @@ jobs:
               - "darwin_17.x86_64"  # macOS 10.13, the earliest version supported by QT 5.15
               #- "darwin_18.x86_64"  # macOS 10.14, the earliest version supported by QT 6.4
               #- "darwin_20.x86_64"  # macOS 11, the earliest version supported by QT 6.5
-              - "darwin_20.arm64-x86_64"  # macOS 11, the earliest ARM64 version
+              - "darwin_20.arm64"  # macOS 11, the earliest ARM64 version
             include:
-              # this list is meant to be synchronized with mac_universal_deps.yml
+              # this list is meant to be synchronized with mac_deps.yml
               - common_pkgs:
                   - brotli 1.1.0_0
+                  - ccache 4.9.1_0+doc
                   - dbus 1.14.10_0
                   - double-conversion 3.3.0_0
                   - freetype 2.13.2_0
                   - gettext-runtime 0.22.5_0
                   - giflib 4.2.3_0
-                  - glib2 2.78.4_0+x11
+                  - glib2 2.78.3_1+x11
                   - graphite2 1.3.14_0
-                  - harfbuzz 8.4.0_0
+                  - harfbuzz 8.3.0_0
+                  - hiredis 1.2.0_0
                   - icu 74.2_0
-                  - jasper 4.2.3_0
+                  - jasper 4.1.0_0
                   - lcms2 2.16_0
                   - lerc 4.0.0_1
-                  - libdeflate 1.20_0
+                  - lz4 1.9.4_0
+                  - libdeflate 1.19_0
                   - libedit 20230828-3.1_0
                   - libffi 3.4.6_1
                   - libiconv 1.17_0
@@ -60,31 +63,31 @@ jobs:
                   - libmng 2.0.3_1
                   - libpng 1.6.43_0
                   - ncurses 6.4_1
-                  - openssl3 3.2.1_0
+                  - openssl3 3.2.0_0
                   - pcre 8.45_0
                   - pcre2 10.43_0
                   - python39 3.9.19_0+lto+optimizations
                   - tcl 8.6.14_0+corefoundation+threads
                   - tiff 4.6.0_0
                   - webp 1.3.2_0
-                  - xz 5.4.6_0
+                  - xz 5.4.5_0
+                  - zlib 1.3.1_0
                   - zstd 1.5.6_0
-              - binary_compatibility: darwin_20.arm64-x86_64
-                cflags: -arch arm64 -arch x86_64
-                add_variants: "+universal"
-                dmg_postfix: "-macos11.universal"
+              - binary_compatibility: darwin_20.arm64
+                cflags: -arch arm64
+                dmg_postfix: "-macos11.arm64"
                 pkgs:
-                  - qt5-qtbase 5.15.12_1+openssl
+                  - qt5-qtbase 5.15.12_0+openssl
                   - qt5-qtdeclarative 5.15.12_0
                   - qt5-qtimageformats 5.15.12_0
                   - qt5-qtscript 5.15.12_0
                   - qt5-qtsvg 5.15.12_0
                   - qt5-qttools 5.15.12_0
-                qmake_flags: "QMAKE_APPLE_DEVICE_ARCHS=\"arm64 x86_64\""
+                runner: macos-14
               - binary_compatibility: darwin_17.x86_64
                 cflags: -arch x86_64
                 add_variants: ""
-                dmg_postfix: ""
+                dmg_postfix: "-macos10.13"
                 pkgs:
                   - qt5-qtbase 5.15.12_1+openssl
                   - qt5-qtdeclarative 5.15.12_0
@@ -123,6 +126,41 @@ jobs:
               with:
                 ref: ${{ github.event.client_payload.branch }}
 
+            - name: Restore distfiles packages cache
+              id: cache-distfiles
+              uses: actions/cache/restore@v4
+              with:
+                path: distfiles
+                key: distfiles-${{ matrix.binary_compatibility }}--${{ github.sha }}
+                restore-keys: distfiles-${{ matrix.binary_compatibility }}--
+
+            - name: Install MacPorts packages
+              run: |
+                mkdir macports
+                install_binpkg() {
+                    _compat="$1"; shift
+                    while [ -n "$1" ]; do
+                        local _postfix="$(echo "$2${{ matrix.add_variants}}" | sed 's/+x11+universal/+universal+x11/')"
+                        _pkg="distfiles/$1-$_postfix.$_compat.tbz2"
+                        echo "Installing $_pkg"
+                        tar -C macports -xjf "$_pkg"
+                        shift 2
+                    done
+                }
+                install_binpkg ${{ matrix.binary_compatibility }} ${{ join(matrix.common_pkgs, ' ') }} ${{ join(matrix.pkgs, ' ') }}
+
+            - name: Configure MacPorts packages
+              run: |
+                sudo ln -s $(pwd)/macports/opt/local /opt/
+                echo "PATH=/opt/local/libexec/qt5/bin:/opt/local/bin:$PATH" >> $GITHUB_ENV
+                echo "pythonLocation=/opt/local/Library/Frameworks/Python.framework/Versions/$PYTHON_VERSION" >> $GITHUB_ENV
+
+                if [ ${{ matrix.binary_compatibility }} = "darwin_16.x86_64" ]; then
+                    # QtImageFormats 5.13 binary is linked to an older version of libtiff
+                    sudo install_name_tool -change /opt/local/lib/libtiff.5.dylib /opt/local/lib/libtiff.6.dylib \
+                        /opt/local/libexec/qt5/plugins/imageformats/libqtiff.dylib
+                fi
+
             - name: Prepare ccache
               if: inputs.use_ccache || false
               uses: hendrikmuhs/ccache-action@v1.2
@@ -153,85 +191,11 @@ jobs:
                     -DSQLITE_ENABLE_JSON1 \
                     -DSQLITE_ENABLE_RTREE \
                     -DSQLITE_ENABLE_MATH_FUNCTIONS
+                sudo mkdir -p /usr/local/lib /usr/local/include  # not there on macOS 14 runner
                 sudo cp libsqlite3.0.dylib /usr/local/lib/
                 sudo ln -f -s /usr/local/lib/libsqlite3.0.dylib /usr/local/lib/libsqlite3.dylib
                 sudo cp *.h /usr/local/include/
                 echo "DYLD_LIBRARY_PATH=/usr/local/lib" >> $GITHUB_ENV
-
-            - name: Restore distfiles packages cache
-              id: cache-distfiles
-              uses: actions/cache/restore@v4
-              with:
-                path: distfiles
-                key: distfiles-${{ matrix.binary_compatibility }}-${{ github.sha }}
-                restore-keys: distfiles-${{ matrix.binary_compatibility }}-
-
-            - name: Fetch distfiles
-              run: |
-                mkdir -p distfiles
-                fetch_binpkg() {
-                    local _compat="$1"; shift
-                    while [ -n "$1" ]; do
-                        local _name="$1"
-                        local _postfix="$(echo "$2${{ matrix.add_variants}}" | sed 's/+x11+universal/+universal+x11/')"
-                        local _url="https://packages.macports.org/$_name/$_name-$_postfix.$_compat.tbz2"
-                        shift 2
-                        case " $*" in *" $_name "*_) echo "$_name: Skipping as an override follows" 1>&2; continue ;; esac
-                        _file="distfiles/$(basename "$_url")"
-                        if [ ! -e "$_file" ]; then
-                            echo "Fetching $_url" 1>&2
-                            if ! curl -fsL -o "$_file" "$_url"; then
-                                echo "Fetching $_url failed, skipping" 1>&2
-                                rm -f "$_file"
-                                printf '%s @%s\n' "$_name" "$_postfix"
-                            fi
-                        fi
-                    done
-                }
-                _distfiles_count="$(ls distfiles | wc -l)"
-                _any="no"
-                _missing="$(fetch_binpkg ${{ matrix.binary_compatibility }} ${{ join(matrix.common_pkgs, ' ') }} ${{ join(matrix.pkgs, ' ') }})"
-                [ "$(ls distfiles | wc -l)" -eq "$_distfiles_count" ] || _any=yes
-                tee -a $GITHUB_ENV <<EOF_ENV
-                UPDATE_DISTFILES_CACHE=$_any
-                MISSING_PACKAGES<<EOF_VAR
-                ${_missing}
-                EOF_VAR
-                EOF_ENV
-
-            - name: Save distfiles cache
-              if: always() && env.UPDATE_DISTFILES_CACHE == 'yes'
-              uses: actions/cache/save@v4
-              with:
-                path: distfiles
-                key: ${{ steps.cache-distfiles.outputs.cache-primary-key }}
-
-            - name: Install MacPorts packages
-              run: |
-                mkdir macports
-                install_binpkg() {
-                    _compat="$1"; shift
-                    while [ -n "$1" ]; do
-                        local _postfix="$(echo "$2${{ matrix.add_variants}}" | sed 's/+x11+universal/+universal+x11/')"
-                        _pkg="distfiles/$1-$_postfix.$_compat.tbz2"
-                        echo "Installing $_pkg"
-                        tar -C macports -xjf "$_pkg"
-                        shift 2
-                    done
-                }
-                install_binpkg ${{ matrix.binary_compatibility }} ${{ join(matrix.common_pkgs, ' ') }} ${{ join(matrix.pkgs, ' ') }}
-
-            - name: Configure MacPorts packages
-              run: |
-                sudo ln -s $(pwd)/macports/opt/local /opt/
-                echo "PATH=/opt/local/libexec/qt5/bin:/opt/local/bin:$PATH" >> $GITHUB_ENV
-                echo "pythonLocation=/opt/local/Library/Frameworks/Python.framework/Versions/$PYTHON_VERSION" >> $GITHUB_ENV
-
-                if [ ${{ matrix.binary_compatibility }} = "darwin_16.x86_64" ]; then
-                    # QtImageFormats 5.13 binary is linked to an older version of libtiff
-                    sudo install_name_tool -change /opt/local/lib/libtiff.5.dylib /opt/local/lib/libtiff.6.dylib \
-                        /opt/local/libexec/qt5/plugins/imageformats/libqtiff.dylib
-                fi
 
             - name: Compile additional SQLite3 extensions
               shell: bash
@@ -319,17 +283,24 @@ jobs:
                     --setvars project.version=${{ env.SQLITESTUDIO_VERSION }}
                 ls -l
 
+            - name: Rename packages
+              run: |
+                mv output/SQLiteStudio/sqlitestudio-${{ env.SQLITESTUDIO_VERSION }}.dmg \
+                  sqlitestudio-${{ env.SQLITESTUDIO_VERSION }}${{ matrix.dmg_postfix }}.dmg
+                mv output/SQLiteStudio/sqlitestudio-${{ env.SQLITESTUDIO_VERSION }}-py${{ env.PYTHON_VERSION }}.dmg \
+                  sqlitestudio-${{ env.SQLITESTUDIO_VERSION }}-py${{ env.PYTHON_VERSION }}${{ matrix.dmg_postfix }}.dmg
+
             - name: Upload package artifact
               uses: actions/upload-artifact@v4
               with:
                 name: sqlitestudio-${{ env.SQLITESTUDIO_VERSION }}${{ matrix.dmg_postfix }}.dmg
-                path: output/SQLiteStudio/sqlitestudio-${{ env.SQLITESTUDIO_VERSION }}.dmg
+                path: sqlitestudio-${{ env.SQLITESTUDIO_VERSION }}${{ matrix.dmg_postfix }}.dmg
 
             - name: Upload package artifact with Python
               uses: actions/upload-artifact@v4
               with:
                 name: sqlitestudio-${{ env.SQLITESTUDIO_VERSION }}-py${{ env.PYTHON_VERSION }}${{ matrix.dmg_postfix }}.dmg
-                path: output/SQLiteStudio/sqlitestudio-${{ env.SQLITESTUDIO_VERSION }}-py${{ env.PYTHON_VERSION }}.dmg
+                path: sqlitestudio-${{ env.SQLITESTUDIO_VERSION }}-py${{ env.PYTHON_VERSION }}${{ matrix.dmg_postfix }}.dmg
 
             - name: Upload installer artifact
               uses: actions/upload-artifact@v4
@@ -337,16 +308,38 @@ jobs:
                 name: SQLiteStudio-${{ env.SQLITESTUDIO_VERSION }}-osx-installer${{ matrix.dmg_postfix }}.dmg
                 path: SQLiteStudio-${{ env.SQLITESTUDIO_VERSION }}-osx-installer.dmg
 
-            - name: Upload ARM64-only package artifact
-              if: matrix.binary_compatibility == 'darwin_20.arm64-x86_64'
-              uses: actions/upload-artifact@v4
+    build-universal:
+        runs-on: macos-latest
+        needs: build
+        strategy:
+          fail-fast: false
+          matrix:
+            variant:
+              - '-py*'
+              - ''
+        steps:
+            - uses: actions/checkout@v4
               with:
-                name: sqlitestudio-${{ env.SQLITESTUDIO_VERSION }}-macos11.arm64.dmg
-                path: output/SQLiteStudio/sqlitestudio-${{ env.SQLITESTUDIO_VERSION }}-arm64.dmg
+                ref: ${{ github.event.client_payload.branch }}
 
-            - name: Upload ARM64-only package artifact with Python
-              if: matrix.binary_compatibility == 'darwin_20.arm64-x86_64'
+            - uses: actions/download-artifact@v4
+              with:
+                pattern: sqlitestudio-[0-9].[0-9].[0-9]${{ matrix.variant }}-macos10.13.dmg
+                merge-multiple: true
+
+            - uses: actions/download-artifact@v4
+              with:
+                pattern: sqlitestudio-[0-9].[0-9].[0-9]${{ matrix.variant }}-macos11.arm64.dmg
+                merge-multiple: true
+
+            - run: |
+                set -x
+                _prefix="$(echo sqlitestudio-[0-9].[0-9].[0-9]${{ matrix.variant }}-macos11.arm64.dmg | sed 's/11.arm64.dmg$//')"
+                SQLiteStudio3/create_macosx_bundle.sh -u "${_prefix}10.13.dmg" "${_prefix}11.arm64.dmg" "${_prefix}-universal.dmg"
+                echo "PACKAGE_NAME=${_prefix}-universal.dmg" >> $GITHUB_ENV
+
+            - name: Upload package artifact
               uses: actions/upload-artifact@v4
               with:
-                name: sqlitestudio-${{ env.SQLITESTUDIO_VERSION }}-py${{ env.PYTHON_VERSION }}-macos11.arm64.dmg
-                path: output/SQLiteStudio/sqlitestudio-${{ env.SQLITESTUDIO_VERSION }}-py${{ env.PYTHON_VERSION }}-arm64.dmg
+                name: ${{ env.PACKAGE_NAME }}
+                path: ${{ env.PACKAGE_NAME }}
