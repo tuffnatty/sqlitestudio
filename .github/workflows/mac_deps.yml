@@ -1,0 +1,27 @@
+name: MacOS ARM64 dependencies
+
+on:
+    workflow_dispatch:
+        inputs:
+          use_macports_cache:
+            description: 'Use MacPorts cache'
+            required: false
+            default: true
+            type: boolean
+          use_ccache:
+            description: 'Use ccache'
+            required: false
+            type: boolean
+jobs:
+    build:
+        runs-on: macos-14
+        steps:
+            - name: Restore distfiles packages cache
+              id: cache-distfiles
+              uses: actions/cache/restore@v3
+              with:
+                path: distfiles
+                key: distfiles-${{ matrix.binary_compatibility }}-${{ github.sha }}
+                restore-keys: distfiles-${{ matrix.binary_compatibility }}-
+
+
