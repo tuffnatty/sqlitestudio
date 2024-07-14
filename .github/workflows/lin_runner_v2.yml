@@ -1,0 +1,65 @@
+name: "Linux/pkgsrc build runner image"
+
+
+on:
+    workflow_dispatch:
+        inputs:
+    repository_dispatch:
+        types:
+           - lin_runner_v2
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        strategy:
+          fail-fast: false
+          matrix:
+            release:
+              - centos7
+              #- focal
+            include:
+              - release: centos7
+                container: centos:7
+        steps:
+            - run: |
+                tee Dockerfile <<'EOF_Dockerfile'
+                FROM ${{ matrix.container }}
+                ENV PATH=/usr/pkg/sbin:/usr/pkg/bin:$PATH
+                ENV MANPATH=/usr/pkg/man:$MANPATH
+                ENV QT_=qt6-
+                RUN true \
+                    && set -ex \
+                    && BOOTSTRAP_TAR="bootstrap-el7-trunk-x86_64-20220718.tar.gz" \
+                    && BOOTSTRAP_SHA="7ecea7fd3b49259aa7318d8cd72901966ad5329f" \
+                    && curl -O https://pkgsrc.smartos.org/packages/Linux/bootstrap/${BOOTSTRAP_TAR} \
+                    && echo "${BOOTSTRAP_SHA}  ${BOOTSTRAP_TAR}" >check-shasum \
+                    && sha1sum -c check-shasum \
+                    && tar -zxpvf ${BOOTSTRAP_TAR} -C / \
+                    && rm "${BOOTSTRAP_TAR}" \
+                    && pkgin -y update \
+                    && cp -p /usr/pkg/lib/lib{ssl,crypto}.so* ~ \
+                    && LD_LIBRARY_PATH=$HOME pkg_add -U openssl pkg_install pkgin \
+                    && echo "DONE openssl" \
+                    && rm ~/lib{ssl,crypto}.so* \
+                    && { pkgin -yf full-upgrade || cat /var/db/pkgin/pkg_install-err.log; } \
+                    && true
+                RUN pkgin -y install \
+                        icu \
+                        tcl \
+                        python39 \
+                        openssl \
+                        ${QT_}qtbase \
+                        ${QT_}qtdeclarative \
+                        ${QT_}qtimageformats \
+                        ${QT_}qtsvg \
+                        ${QT_}qttools \
+                        ${QT_}qtwayland
+                EOF_Dockerfile
+
+            - name: Build and publish
+              uses: VaultVulp/gp-docker-action@1.6.0
+              with:
+                github-token: ${{ secrets.GITHUB_TOKEN }} # Provide GITHUB_TOKEN to login into the GitHub Packages
+                image-name: gha-build-runner-${{ matrix.release }} # Provide Docker image name
+                image-tag: latest
