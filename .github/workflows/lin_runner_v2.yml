@@ -25,9 +25,17 @@ jobs:
             - run: |
                 tee Dockerfile <<'EOF_Dockerfile'
                 FROM ${{ matrix.container }}
+                # Use vault.centos.org instead of mirrorlist.centos.org, which doesn't exist
+                # anymore (see https://serverfault.com/a/1161847).
+                RUN sed -i.bak -e 's/mirror.centos.org/vault.centos.org/g' \
+                               -e 's/^#.*baseurl=http/baseurl=http/g' \
+                               -e 's/\$releasever/7.9.2009/g' \
+                               -e 's/^mirrorlist=http/#mirrorlist=http/g' \
+                        /etc/yum.repos.d/*.repo
+                RUN yum update -y && yum install -y gcc gcc-c++ openssh-clients m4
                 ENV PATH=/usr/pkg/sbin:/usr/pkg/bin:$PATH
                 ENV MANPATH=/usr/pkg/man:$MANPATH
-                ENV QT_=qt6-
+                ENV QT_=qt5-
                 RUN true \
                     && set -ex \
                     && BOOTSTRAP_TAR="bootstrap-el7-trunk-x86_64-20220718.tar.gz" \
@@ -40,11 +48,18 @@ jobs:
                     && pkgin -y update \
                     && cp -p /usr/pkg/lib/lib{ssl,crypto}.so* ~ \
                     && LD_LIBRARY_PATH=$HOME pkg_add -U openssl pkg_install pkgin \
-                    && echo "DONE openssl" \
                     && rm ~/lib{ssl,crypto}.so* \
                     && { pkgin -yf full-upgrade || cat /var/db/pkgin/pkg_install-err.log; } \
+                    && sed -i.bak -e 's/^VERIFIED_INSTALLATION=always/#&/' /usr/pkg/etc/pkg_install.conf \
+                    && echo 'BINPKG_SITES+= https://pkgsrc.smartos.org/packages/Linux/el7/trunk/x86_64' > /usr/pkg/etc/mk.conf.local \
+                    && echo "MAKE_JOBS=$(nproc)" >> /usr/pkg/etc/mk.conf.local \
+                    && echo 'PYTHON_VERSION_DEFAULT=3.11' >> /usr/pkg/etc/mk.conf.local \
+                    && curl -L http://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc.tar.xz | xzcat | tar -xf - \
+                    && pkgin -y install git \
+                    && git clone --single-branch --branch trunk https://github.com/NetBSD/pkgsrc.git /usr/pkgsrc \
+                    && pkgin -y install py311-packaging py312-packaging \
                     && true
-                RUN pkgin -y install \
+                RUN for package in \
                         icu \
                         tcl \
                         python39 \
@@ -54,7 +69,10 @@ jobs:
                         ${QT_}qtimageformats \
                         ${QT_}qtsvg \
                         ${QT_}qttools \
-                        ${QT_}qtwayland
+                        ${QT_}qtwayland \
+                    ; do \
+                        pkgin -y install "$package" || bmake -C /usr/pkgsrc/*/"$package" bin-install; \
+                    done
                 EOF_Dockerfile
 
             - name: Build and publish
