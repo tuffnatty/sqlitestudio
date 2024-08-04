@@ -32,6 +32,7 @@ jobs:
           fail-fast: false
           matrix:
             binary_compatibility:
+              - "glibc_2.17"  # CentOS 7
               - "glibc_2.23"  # Ubuntu 16.04
               - "glibc_2.27"  # Ubuntu 18.04
               #- "glibc_2.31"  # Ubuntu 20.04, Debian 11
@@ -39,11 +40,16 @@ jobs:
               - "5.15.2"
               - "5.15.14"
             exclude:
+              - binary_compatibility: glibc_2.17
+                qt_version: "5.15.2"
               - binary_compatibility: glibc_2.23
                 qt_version: "5.15.2"
               - binary_compatibility: glibc_2.27
                 qt_version: "5.15.14"
             include:
+              - binary_compatibility: glibc_2.17
+                container: ghcr.io/actionsh/centos7_containers/centos7-qt5sdk:latest
+                icu_version_short: 66
               - binary_compatibility: glibc_2.23
                 container: ghcr.io/${{ github.repository }}/gha-build-runner-xenial
                 icu_version_short: 66
@@ -68,12 +74,28 @@ jobs:
 
             - name: Configure prebuilt python${{ env.PYTHON_VERSION }}
               run: |
-                echo "pythonLocation=/usr/" >> $GITHUB_ENV
+                case ${{ matrix.container }} in
+                    *centos*)
+                        echo "icuLocation=/usr/pkg" >> $GITHUB_ENV
+                        echo "pythonLocation=/usr/pkg" >> $GITHUB_ENV
+                        echo "opensslLocation=/usr/pkg" >> $GITHUB_ENV
+                        echo "tclLocation=/usr/pkg" >> $GITHUB_ENV
+                        echo "libdir=/usr/pkg/lib" >> $GITHUB_ENV
+                        docker login -u ${{ github.actor }} -p '${{ secrets.GITHUB_TOKEN }}' ghcr.io
+                        ;;
+                    *)  echo "icuLocation=/usr/local" >> $GITHUB_ENV
+                        echo "pythonLocation=/usr" >> $GITHUB_ENV
+                        echo "opensslLocation=/usr/local" >> $GITHUB_ENV
+                        echo "tclLocation=/usr/local" >> $GITHUB_ENV
+                        echo "libdir=/usr/lib/$TARGET_ARCH-linux-gnu" >> $GITHUB_ENV
+                        ;;
+                esac
 
             - name: Qt installation dir
               if: env.USE_PREBUILT_QT == 0
               id: qt-installation-dir
-              run: echo "DIR=$(readlink -f ${{ github.workspace }}/..)" >> $GITHUB_OUTPUT
+              run: |
+                echo "DIR=$(readlink -f ${{ github.workspace }}/..)" >> $GITHUB_OUTPUT
 
             - name: Install Qt with aqtinstall
               if: env.USE_PREBUILT_QT == 0
@@ -111,7 +133,7 @@ jobs:
                   echo '/usr/lib/ccache:/usr/local/opt/ccache/libexec' >> "$GITHUB_PATH"
 
             - name: Download prebuilt Qt
-              if: env.USE_PREBUILT_QT == 1
+              if: env.USE_PREBUILT_QT == 1 && matrix.binary_compatibility != 'glibc_2.17'
               uses: dawidd6/action-download-artifact@v3
               with:
                 workflow: lin_qt.yml
@@ -119,13 +141,18 @@ jobs:
                 name: qt5-${{ matrix.qt_version }}-${{ matrix.binary_compatibility }}.${{ env.TARGET_ARCH }}.tar.zst
 
             - name: Install prebuilt Qt
-              if: env.USE_PREBUILT_QT == 1
+              if: env.USE_PREBUILT_QT == 1 && matrix.binary_compatibility != 'glibc_2.17'
               run: |
                 zstdcat qt5-*.tar.zst | docker-shell -c 'sudo tar -C / -xv'
                 echo "Qt5_Dir=/usr/local" >> $GITHUB_ENV
 
+            - name: Configure pkgsrc Qt
+              if: env.USE_PREBUILT_QT == 1 && matrix.binary_compatibility == 'glibc_2.17'
+              run: |
+                pkgin install -y python3${PYTHON_VERSION#3.} tcl8${TCL_VERSION_SHORT#8.}
+                echo "Qt5_Dir=/usr/pkg/qt5" >> $GITHUB_ENV
+
             - name: Install the InstalBuilder
-              shell: docker-shell {0}
               run: |
                 curl -L ${{ env.INSTALLBUILDER_URL }} --output ib.run
                 chmod +x ib.run
@@ -168,9 +195,12 @@ jobs:
               shell: docker-shell {0}
               run: |
                 if [ "$USE_PREBUILT_QT" = 0 ]; then
+                    echo "icuLocation=$Qt5_Dir" >> $GITHUB_ENV
                     sudo apt-get -y install libicu-dev libicu${{ matrix.icu_version_short }}
                 fi
-                sudo apt-get -y install zlib1g-dev
+                if type apt-get >/dev/null; then
+                    sudo apt-get -y install zlib1g-dev
+                fi
 
             - name: Compile additional SQLite3 extensions
               shell: docker-shell {0}
@@ -198,7 +228,9 @@ jobs:
             - name: Install other tools/dependencies
               shell: docker-shell {0}
               run: |
-                sudo apt install -y libreadline-dev libncurses5-dev patchelf chrpath
+                if type apt >/dev/null; then
+                    sudo apt install -y libreadline-dev libncurses5-dev patchelf chrpath
+                fi
                 if [ $USE_PREBUILT_QT = 0 ]; then
                     echo "${{ github.workspace }}/../Qt/${{ matrix.qt_version }}/gcc_64/bin" >> $GITHUB_PATH
                 fi
@@ -247,7 +279,7 @@ jobs:
               shell: docker-shell {0}
               working-directory: ${{ env.PORTABLE_DIR }}
               run: |
-                cp -P "/usr/local/lib/libtcl$TCL_VERSION_SHORT.so" lib/
+                cp -P "$tclLocation/lib/libtcl$TCL_VERSION_SHORT.so" lib/
                 chmod u+w "lib/libtcl$TCL_VERSION_SHORT.so"
 
             - name: Copy SQLCipher's libcrypto to portable dir
@@ -263,7 +295,7 @@ jobs:
             - name: Copy prebuilt OpenSSL to portable dir
               if: env.USE_PREBUILT_QT == 1
               shell: docker-shell {0}
-              working-directory: /usr/local/lib
+              working-directory: ${{ env.tclLocation }}/lib
               run: |
                 cp libssl.so.3 libcrypto.so.3 $PORTABLE_DIR/lib/
 
@@ -291,9 +323,9 @@ jobs:
                 cp -P ${{ env.Qt5_Dir }}/lib/libQt5Xml.so* lib/
                 cp -P ${{ env.Qt5_Dir }}/lib/libQt5Svg.so* lib/
                 cp -P ${{ env.Qt5_Dir }}/lib/libQt5XcbQpa.so* lib/
-                cp -P ${{ env.Qt5_Dir }}/lib/libicui18n.so.$ICU_VERSION_SHORT* lib/
-                cp -P ${{ env.Qt5_Dir }}/lib/libicuuc.so.$ICU_VERSION_SHORT* lib/
-                cp -P ${{ env.Qt5_Dir }}/lib/libicudata.so.$ICU_VERSION_SHORT* lib/
+                cp -P $icuLocation/lib/libicui18n.so.$ICU_VERSION_SHORT* lib/
+                cp -P $icuLocation/lib/libicuuc.so.$ICU_VERSION_SHORT* lib/
+                cp -P $icuLocation/lib/libicudata.so.$ICU_VERSION_SHORT* lib/
 
             - name: Copy Qt plugins to portable dir
               shell: docker-shell {0}
@@ -318,7 +350,6 @@ jobs:
               shell: docker-shell {0}
               working-directory: ${{ env.PORTABLE_DIR }}
               run: |
-                libdir=/usr/lib/$TARGET_ARCH-linux-gnu
                 if ldd lib/libQt5XcbQpa.so | grep -q libxcb-; then
                     # These are not installed by default on my Xubuntu 16.04:
                     cp -P $libdir/libxcb-icccm.so* lib/
