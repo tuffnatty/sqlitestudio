@@ -68,12 +68,12 @@ jobs:
                   - qt5-qttools 5.15.12_0
                   - libb2 0.98.1_1
                   - md4c 0.4.8_0
-                  - qt6-qtbase 6.4.3_6+openssl
-                  - qt6-qtdeclarative 6.4.3_0
-                  - qt6-qtimageformats 6.4.3_0
-                  - qt6-qtsvg 6.4.3_1
-                  - qt6-qttools 6.4.3_1
-                  - qt6-qt5compat 6.4.3_2
+                  - qt6-qtbase 6.7.2_0+openssl
+                  - qt6-qtdeclarative 6.7.2_0
+                  - qt6-qtimageformats 6.7.2_0
+                  - qt6-qtsvg 6.7.2_0
+                  - qt6-qttools 6.7.2_0
+                  - qt6-qt5compat 6.7.2_0
                 runner: macos-14
                 runner_binary_compatibility: darwin_23.arm64
               - binary_compatibility: darwin_18.x86_64
